@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from avatar_studio.config import Settings
+from avatar_studio.factory import build_face_generator, build_pipeline
 
 settings = Settings.from_env()
 app = FastAPI(title="Avatar Studio (SFW)", version="0.1.0")
@@ -27,42 +28,17 @@ _pipeline = None
 _face = None
 
 
-def _build_pipeline():
-    from avatar_studio.persona.ollama_backend import OllamaPersona
-    from avatar_studio.pipeline import AvatarPipeline
-    from avatar_studio.safety.image_filter import NSFWImageClassifier
-    from avatar_studio.safety.text_filter import TextSafety
-    from avatar_studio.talkinghead.renderer import SadTalkerRenderer
-    from avatar_studio.voice.tts import VoiceCloneTTS
-
-    return AvatarPipeline(
-        persona=OllamaPersona(settings.ollama_url, settings.ollama_model, settings.persona_name),
-        tts=VoiceCloneTTS(
-            settings.tts_model, settings.voice_sample, settings.tts_language, settings.device
-        ),
-        head=SadTalkerRenderer(settings.sadtalker_dir, settings.device),
-        face_image=settings.face_image,
-        text_safety=TextSafety(),
-        media_safety=NSFWImageClassifier(
-            settings.nsfw_classifier, settings.nsfw_threshold, settings.device
-        ),
-        work_dir=settings.work_dir,
-    )
-
-
 def pipeline():
     global _pipeline
     if _pipeline is None:
-        _pipeline = _build_pipeline()
+        _pipeline = build_pipeline(settings)
     return _pipeline
 
 
 def face_generator():
     global _face
     if _face is None:
-        from avatar_studio.face.generate import FaceGenerator
-
-        _face = FaceGenerator(settings.sdxl_base, settings.lora_path, settings.device)
+        _face = build_face_generator(settings)
     return _face
 
 

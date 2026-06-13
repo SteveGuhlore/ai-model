@@ -57,7 +57,21 @@ git clone <your-fork> avatar-studio && cd avatar-studio
 bash scripts/provision_vm.sh        # system deps, models, Ollama, SadTalker
 ```
 
-Then:
+### Easiest: the clickable control panel
+
+```bash
+source .venv/bin/activate
+python -m avatar_studio.ui.studio      # serves on :7860
+```
+From your laptop, tunnel in (don't expose it publicly) and open the browser:
+```bash
+ssh -L 7860:localhost:7860 user@your-vm   # then http://localhost:7860
+```
+Tab 1: upload your photos + voice clip and click **Train**. Tab 2: generate a
+reference face and click **Use as reference**. Tab 3: chat and get a talking
+video back.
+
+### Or the command line
 
 1. Drop **15–30 varied photos of yourself** into `assets/me/` and a clean
    ~10s voice clip at `assets/voice_ref.wav`.

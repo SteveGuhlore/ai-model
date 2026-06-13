@@ -17,7 +17,7 @@ python3 -m venv .venv
 # shellcheck disable=SC1091
 source .venv/bin/activate
 pip install --upgrade pip wheel
-pip install -e ".[ml,dev]"
+pip install -e ".[ml,ui,dev]"
 
 echo "==> Third-party model repos"
 mkdir -p third_party
@@ -41,15 +41,17 @@ cat <<'NEXT'
 
 Provisioning complete.
 
-Next:
+Easiest path — launch the clickable control panel:
+    source .venv/bin/activate
+    python -m avatar_studio.ui.studio
+Then from your laptop:  ssh -L 7860:localhost:7860 user@this-vm
+and open http://localhost:7860  (Tab 1 upload+train, Tab 2 face, Tab 3 chat).
+
+Prefer the command line?
   1) Put 15-30 of YOUR photos in assets/me/ and a ~10s voice clip at
      assets/voice_ref.wav  (only your own likeness / consented voice).
-  2) Train your likeness LoRA:
-       source .venv/bin/activate
-       python -m avatar_studio.face.train_lora \
-         --instance-data assets/me --output models/likeness-lora
-     then set AVATAR_LORA_PATH to the produced .safetensors.
-  3) Generate a reference face still and save it as assets/face.png.
-  4) Launch the API:
-       uvicorn avatar_studio.api.app:app --host 0.0.0.0 --port 8000
+  2) python -m avatar_studio.face.train_lora --instance-data assets/me \
+       --output models/likeness-lora   (then set AVATAR_LORA_PATH)
+  3) Generate a reference face and save it as assets/face.png.
+  4) uvicorn avatar_studio.api.app:app --host 0.0.0.0 --port 8000
 NEXT
