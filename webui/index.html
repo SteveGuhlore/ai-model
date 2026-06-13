@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Avatar Studio (SFW)</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+      #log { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; min-height: 160px; }
+      .msg { margin: .5rem 0; }
+      .user { color: #2563eb; }
+      .bot { color: #111; }
+      .blocked { color: #b91c1c; font-style: italic; }
+      #row { display: flex; gap: .5rem; margin-top: 1rem; }
+      input { flex: 1; padding: .6rem; }
+      button { padding: .6rem 1rem; }
+      video { width: 100%; margin-top: 1rem; border-radius: 8px; }
+    </style>
+  </head>
+  <body>
+    <h1>Avatar Studio <small>(SFW)</small></h1>
+    <div id="log"></div>
+    <video id="vid" controls hidden></video>
+    <div id="row">
+      <input id="box" placeholder="Say something..." autocomplete="off" />
+      <button id="send">Send</button>
+    </div>
+
+    <script>
+      const API = location.origin.replace(/:\d+$/, ":8000");
+      const log = document.getElementById("log");
+      const vid = document.getElementById("vid");
+      const box = document.getElementById("box");
+      const history = [];
+
+      function add(role, text, blocked) {
+        const d = document.createElement("div");
+        d.className = "msg " + (blocked ? "blocked" : role);
+        d.textContent = (role === "user" ? "You: " : "Avatar: ") + text;
+        log.appendChild(d);
+      }
+
+      async function send() {
+        const message = box.value.trim();
+        if (!message) return;
+        box.value = "";
+        add("user", message);
+        const res = await fetch(API + "/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message, history }),
+        });
+        const data = await res.json();
+        add("bot", data.text, data.blocked);
+        if (!data.blocked) {
+          history.push({ role: "user", content: message });
+          history.push({ role: "assistant", content: data.text });
+        }
+        if (data.video_url) {
+          vid.src = API + data.video_url;
+          vid.hidden = false;
+          vid.play().catch(() => {});
+        }
+      }
+
+      document.getElementById("send").onclick = send;
+      box.addEventListener("keydown", (e) => e.key === "Enter" && send());
+    </script>
+  </body>
+</html>

@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.env
+
+# Project data: never commit likeness data, weights, or generated media
+assets/face*.png
+assets/voice_ref*.wav
+models/
+third_party/
+outputs/
+*.safetensors
+*.ckpt
+*.pt
+*.mp4
+*.wav
+
+# Tooling
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
