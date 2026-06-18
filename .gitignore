@@ -25,3 +25,8 @@ outputs/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+outputs/
+media/
+*.db
+.venv/
+__pycache__/

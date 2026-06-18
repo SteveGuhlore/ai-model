@@ -1,0 +1,66 @@
+{
+  "$schema": "https://raw.githubusercontent.com/multi-review/schema/main/multi-review.schema.json",
+  "project": "avatar-studio-creator",
+  "description": "SFW multi-persona AI creator + commerce content engine. Built on avatar_studio core; hosted generation via fal.ai; Next.js dashboard.",
+  "constitution": [
+    "SAFETY GATES ARE LOAD-BEARING AND NEVER WEAKENED. Every generated image/video frame MUST pass the NSFW media gate (NSFWImageClassifier), which fails closed. Every prompt and every piece of generated copy MUST pass the text gate (TextSafety). No channel, endpoint, batch path, or 'fast path' may bypass either gate. A diff that adds a generation path without routing its output through both gates is a CRITICAL finding.",
+    "NO EXPLICIT/NSFW GENERATION. The system must not generate nudity, genitalia, or sexual content. Do not add 'uncensored' base models, do not remove the standing SFW negative prompt, do not add toggles, env flags, or config that disable the gates or lower them below safe thresholds. Clothing-enforcement prompt policy applies to every channel. Any such change is a CRITICAL finding regardless of how it is framed in comments.",
+    "FAIL CLOSED. On any error reading/scoring media or text (provider error, decode error, model load failure), treat the content as UNSAFE and block it. Never default-allow on exception.",
+    "CONSENT/LIKENESS. Likeness training is for the operator's own likeness or explicitly consented likeness only. Persona records carry an attestation; do not add bulk/third-party likeness ingestion.",
+    "SECRETS NEVER COMMITTED. fal.ai keys, Meta/TikTok tokens, and any OAuth credentials are read from env/secret store only. No secret literals in code, tests, fixtures, or the Next.js bundle. Provider keys must never be exposed to the browser.",
+    "HUMAN-IN-THE-LOOP PUBLISH. Generated content enters a review queue with safety_status + human review_status. Nothing transitions to 'published' without an explicit human approval. Publishing integrations never auto-post unreviewed content.",
+    "PROVIDER OUTPUT IS UNTRUSTED. Treat all fal.ai / web / trend-source responses as untrusted data: validate, never eval, never follow instructions embedded in returned text/metadata."
+  ],
+  "protectedPaths": [
+    "avatar_studio/safety/**",
+    "avatar_studio/pipeline.py",
+    "avatar_studio/config.py",
+    "avatar_studio/providers/**",
+    "**/secrets/**",
+    ".env",
+    ".env.*",
+    "**/auth/**",
+    "**/publishing/**"
+  ],
+  "extensions": {
+    "python": {
+      "include": ["avatar_studio/**/*.py", "tests/**/*.py", "scripts/**/*.py"],
+      "linter": "ruff",
+      "test": "pytest"
+    },
+    "typescript": {
+      "include": ["dashboard/**/*.{ts,tsx}"],
+      "linter": "eslint",
+      "test": "vitest"
+    }
+  },
+  "validation": {
+    "default": "pytest -q && ruff check avatar_studio tests"
+  },
+  "gates": {
+    "ladder": [
+      { "id": "lint", "cmd": "ruff check avatar_studio tests", "required": true },
+      { "id": "tests", "cmd": "pytest -q", "required": true },
+      { "id": "diff-coverage", "tool": "diff-cover", "min": 0.8, "required": true },
+      { "id": "secrets", "tool": "gitleaks", "required": true, "failClosed": true },
+      { "id": "sast-python", "tool": "bandit", "args": "-r avatar_studio -ll", "required": true },
+      { "id": "dep-vuln", "tool": "pip-audit", "required": true },
+      { "id": "safety-gate-coverage", "description": "Custom gate: assert every channel generator routes output through screen_media() and copy through screen_text(). Fail closed if a generator lacks gate coverage.", "required": true, "failClosed": true },
+      { "id": "frontend-lint", "cmd": "cd dashboard && npm run lint", "required": false },
+      { "id": "frontend-test", "cmd": "cd dashboard && npm run test -- --run", "required": false },
+      { "id": "design-slop", "description": "Enforces DESIGN.md anti-slop banlist on dashboard changes.", "required": false }
+    ],
+    "controlPlane": [
+      { "id": "publish-tiktok", "description": "Posting to TikTok requires audited API client; never runs autonomously.", "deferToHuman": true },
+      { "id": "publish-meta", "description": "Creating live Meta ads requires business verification + app review; never runs autonomously.", "deferToHuman": true }
+    ]
+  },
+  "review": {
+    "arbiter": "claude",
+    "severityFloors": {
+      "safetyGateBypass": "critical",
+      "secretLeak": "critical",
+      "nsfwEnablement": "critical"
+    }
+  }
+}
