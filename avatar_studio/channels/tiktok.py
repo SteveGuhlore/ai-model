@@ -62,6 +62,8 @@ class TikTokGenerator:
                 seed=brief.seed,
                 n=1,
             )
+            if not imgs:  # provider returned nothing for this still
+                continue
             still = imgs[0]
             if still.nsfw_flag:  # cheap early drop; video gate is the real check
                 continue

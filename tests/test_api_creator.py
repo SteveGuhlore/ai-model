@@ -139,6 +139,28 @@ def test_meta_ad_endpoint(client):
     assert body["variant_count"] == 4
 
 
+def test_count_over_limit_rejected(client):
+    pid = _ready_persona(client)
+    g = client.post(
+        "/generate",
+        json={"persona_id": pid, "channel": "lifestyle", "prompt": "x", "count": 9999},
+    )
+    assert g.status_code == 422  # bounded to prevent unbounded paid batches
+
+
+def test_unknown_placement_is_422_not_500(client):
+    pid = _ready_persona(client)
+    g = client.post(
+        "/generate",
+        json={"persona_id": pid, "prompt": "x", "placements": ["billboard"]},
+    )
+    assert g.status_code == 422
+
+
+def test_invalid_review_status_is_422(client):
+    assert client.get("/content", params={"review_status": "bogus"}).status_code == 422
+
+
 def test_unknown_channel_rejected(client):
     pid = client.post(
         "/personas", json={"name": "Ava", "consent_attestation": True}

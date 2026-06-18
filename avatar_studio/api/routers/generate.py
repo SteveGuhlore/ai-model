@@ -9,7 +9,7 @@ without an explicit approve).
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from avatar_studio.api.deps import copywriter, gen_context, registry, store
 from avatar_studio.channels.base import Brief, PromptBlocked
@@ -23,11 +23,12 @@ router = APIRouter(tags=["content"])
 
 
 class GenerateIn(BaseModel):
+    # Bounds keep a single request from triggering an unbounded (paid) batch.
     persona_id: str
     channel: str = "lifestyle"
-    prompt: str
-    placements: list[str] = ["ig_square"]
-    count: int = 1
+    prompt: str = Field(min_length=1, max_length=2000)
+    placements: list[str] = Field(default=["ig_square"], min_length=1, max_length=8)
+    count: int = Field(default=1, ge=1, le=12)
     seed: int | None = None
 
 
@@ -70,6 +71,8 @@ def generate(inp: GenerateIn):
         produced = gen.generate(persona, _brief(inp))
     except PromptBlocked as exc:
         raise HTTPException(422, str(exc))
+    except ValueError as exc:  # e.g. unknown placement from sizing.spec_for
+        raise HTTPException(422, str(exc))
     return {"created": len(produced), "content": [_content_out(c) for c in produced]}
 
 
@@ -88,12 +91,14 @@ def generate_product_ad(inp: ProductAdIn):
         produced = gen.generate(persona, product, _brief(inp))
     except PromptBlocked as exc:
         raise HTTPException(422, str(exc))
+    except ValueError as exc:  # e.g. unknown placement from sizing.spec_for
+        raise HTTPException(422, str(exc))
     return {"created": len(produced), "content": [_content_out(c) for c in produced]}
 
 
 class MetaAdIn(GenerateIn):
     product_id: str | None = None
-    copy_variants: int = 2
+    copy_variants: int = Field(default=2, ge=1, le=6)
 
 
 @router.post("/generate/meta-ad")
@@ -106,6 +111,8 @@ def generate_meta_ad(inp: MetaAdIn):
     try:
         draft = asm.assemble(persona, _brief(inp), product=product, copy_variants=inp.copy_variants)
     except PromptBlocked as exc:
+        raise HTTPException(422, str(exc))
+    except ValueError as exc:  # e.g. unknown placement from sizing.spec_for
         raise HTTPException(422, str(exc))
     return {
         "persona_id": draft.persona_id,
@@ -132,7 +139,10 @@ def create_product(inp: ProductIn):
 
 @router.get("/content")
 def list_content(persona_id: str | None = None, review_status: str | None = None):
-    rs = ReviewStatus(review_status) if review_status else None
+    try:
+        rs = ReviewStatus(review_status) if review_status else None
+    except ValueError:
+        raise HTTPException(422, "invalid review_status")
     return [_content_out(c) for c in store().list_content(persona_id, rs)]
 
 

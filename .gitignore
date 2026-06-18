@@ -30,3 +30,5 @@ media/
 *.db
 .venv/
 __pycache__/
+reviews/loop-*/
+reviews/dashboard.html

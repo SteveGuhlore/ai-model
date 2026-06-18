@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from avatar_studio.api.deps import registry
 from avatar_studio.personas.registry import ConsentError
@@ -13,16 +13,16 @@ router = APIRouter(prefix="/personas", tags=["personas"])
 
 
 class PersonaIn(BaseModel):
-    name: str
-    brand_voice: str = ""
-    trigger_word: str = ""
-    voice_ref: str = ""
+    name: str = Field(min_length=1, max_length=120)
+    brand_voice: str = Field(default="", max_length=1000)
+    trigger_word: str = Field(default="", max_length=60)
+    voice_ref: str = Field(default="", max_length=500)
     consent_attestation: bool = False
 
 
 class TrainIn(BaseModel):
-    images_zip_url: str
-    steps: int = 1000
+    images_zip_url: str = Field(min_length=1, max_length=2000)
+    steps: int = Field(default=1000, ge=1, le=5000)
 
 
 def _out(p: Persona) -> dict:

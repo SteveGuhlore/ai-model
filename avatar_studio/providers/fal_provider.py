@@ -19,6 +19,25 @@ from dataclasses import dataclass
 from avatar_studio.providers import fal_models
 from avatar_studio.providers.base import ImageResult, LoraResult, VideoResult
 
+# Provider media is served from fal's CDN. Restrict downloads to these apexes so a
+# compromised/spoofed provider response can't point _download at internal hosts
+# (SSRF). Confirm against fal's CDN docs if hosts change.
+_ALLOWED_DOWNLOAD_APEXES = ("fal.media", "fal.run", "fal.ai")
+_MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024  # cap response size to avoid OOM DoS
+
+
+def _host_allowed(host: str) -> bool:
+    host = (host or "").lower()
+    # Reject IP-literal hosts outright (and any private/loopback/link-local range).
+    import ipaddress
+
+    try:
+        ip = ipaddress.ip_address(host)
+        return not (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved)
+    except ValueError:
+        pass  # not an IP literal — fall through to the apex allowlist
+    return any(host == a or host.endswith("." + a) for a in _ALLOWED_DOWNLOAD_APEXES)
+
 # Logical aspect ratio -> Flux image_size (preset string or {width,height}).
 _IMAGE_SIZE: dict[str, object] = {
     "1:1": "square_hd",
@@ -53,14 +72,29 @@ class FalProvider:
         return self.client
 
     @staticmethod
-    def _download(url: str) -> bytes:
+    def _download(url: str, *, max_bytes: int = _MAX_DOWNLOAD_BYTES) -> bytes:
+        import urllib.parse
+
         import requests
 
-        if not isinstance(url, str) or not url.startswith(("http://", "https://")):
-            raise ValueError("provider returned a non-http media url")
-        resp = requests.get(url, timeout=120)
-        resp.raise_for_status()
-        return resp.content
+        if not isinstance(url, str) or not url.startswith("https://"):
+            # Require https for provider media (blocks file://, http://, etc.).
+            raise ValueError("provider returned a non-https media url")
+        host = urllib.parse.urlparse(url).hostname or ""
+        if not _host_allowed(host):
+            raise ValueError(f"refusing to download from disallowed host {host!r}")
+
+        # Stream and enforce a hard size cap; Content-Length is attacker-controlled
+        # so we count bytes as they arrive rather than trusting the header.
+        with requests.get(url, timeout=120, stream=True) as resp:
+            resp.raise_for_status()
+            chunks, total = [], 0
+            for chunk in resp.iter_content(chunk_size=65536):
+                total += len(chunk)
+                if total > max_bytes:
+                    raise ValueError("provider media exceeds max download size")
+                chunks.append(chunk)
+        return b"".join(chunks)
 
     def generate_image(
         self,

@@ -95,17 +95,35 @@ class AvatarPipeline:
         token = uuid.uuid4().hex[:12]
 
         audio_path = os.path.join(self.work_dir, f"{token}.wav")
-        self.tts.synthesize(candidate, audio_path)
+        video_path = os.path.join(self.work_dir, f"{token}.mp4") if render_video else None
 
-        video_path = None
-        if render_video:
-            video_path = os.path.join(self.work_dir, f"{token}.mp4")
-            self.head.render(self.face_image, audio_path, video_path)
-            if not self.media_safety.is_sfw(video_path):
-                return TurnResult(
-                    text=SAFE_FALLBACK,
-                    blocked=True,
-                    block_reason="output:media_nsfw",
-                )
+        # Synthesis/render can raise mid-turn; never leave partial (possibly
+        # unscreened) media behind on the error path in the servable work_dir.
+        try:
+            self.tts.synthesize(candidate, audio_path)
+            if render_video:
+                self.head.render(self.face_image, audio_path, video_path)
+        except Exception:
+            self._discard(audio_path, video_path)
+            raise
+
+        if render_video and not self.media_safety.is_sfw(video_path):
+            # The gate blocked it — the unsafe artifacts must not linger on disk.
+            self._discard(video_path, audio_path)
+            return TurnResult(
+                text=SAFE_FALLBACK,
+                blocked=True,
+                block_reason="output:media_nsfw",
+            )
 
         return TurnResult(text=candidate, audio_path=audio_path, video_path=video_path)
+
+    @staticmethod
+    def _discard(*paths: str | None) -> None:
+        """Best-effort removal of generated artifacts (used on block/error paths)."""
+        for p in paths:
+            if p:
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
