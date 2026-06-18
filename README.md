@@ -2,19 +2,19 @@
 
 A self-hosted, **SFW** talking-avatar studio. Train a model on **your own**
 likeness and voice, then chat with it and get back a lip-synced talking-head
-video reply — all running on a GPU VM you control.
+video reply â€” all running on a GPU VM you control.
 
 ```
-user text ─▶ persona (LLM) ─▶ SFW text gate ─▶ TTS (your voice)
-                                                      │
-                                                      ▼
-                          SFW media gate ◀─ talking-head video (your face)
+user text â”€â–¶ persona (LLM) â”€â–¶ SFW text gate â”€â–¶ TTS (your voice)
+                                                      â”‚
+                                                      â–¼
+                          SFW media gate â—€â”€ talking-head video (your face)
 ```
 
 ## Scope (read this first)
 
 This project is intentionally **SFW only**. The safety layers aren't optional
-add-ons — they're load-bearing:
+add-ons â€” they're load-bearing:
 
 - a **safety-tuned** image base model (not an "uncensored" checkpoint),
 - a standing **SFW negative prompt** on every image,
@@ -22,7 +22,7 @@ add-ons — they're load-bearing:
 - a **media gate** (NSFW image classifier) that checks every generated frame
   and **fails closed**.
 
-It is built to produce non-explicit content — virtual-influencer / brand /
+It is built to produce non-explicit content â€” virtual-influencer / brand /
 spokesperson use. It is not a foundation for explicit content, and the wiring
 reflects that.
 
@@ -44,8 +44,8 @@ parties without permission. You're responsible for how you use what you build.
 | Orchestration | `avatar_studio/pipeline.py` | pure-Python, unit-tested |
 | API | `avatar_studio/api` | FastAPI |
 
-Every model wrapper lazily imports the heavy ML stack, so the package — and the
-test suite for the orchestration + safety core — runs without a GPU.
+Every model wrapper lazily imports the heavy ML stack, so the package â€” and the
+test suite for the orchestration + safety core â€” runs without a GPU.
 
 ## Quickstart (GPU VM)
 
@@ -73,7 +73,7 @@ video back.
 
 ### Or the command line
 
-1. Drop **15–30 varied photos of yourself** into `assets/me/` and a clean
+1. Drop **15â€“30 varied photos of yourself** into `assets/me/` and a clean
    ~10s voice clip at `assets/voice_ref.wav`.
 2. Train your likeness LoRA:
    ```bash
@@ -97,11 +97,11 @@ cd docker && docker compose up --build
 
 ## API
 
-- `GET /health` — liveness.
-- `POST /chat` — `{ "message", "history", "render_video" }` → reply text +
+- `GET /health` â€” liveness.
+- `POST /chat` â€” `{ "message", "history", "render_video" }` â†’ reply text +
   `audio_url` + `video_url` (or `blocked` + `block_reason`).
-- `POST /generate-image` — `{ "prompt", "seed" }` → a SFW likeness still.
-- `GET /media/{name}` — serves generated files from `AVATAR_WORK_DIR`.
+- `POST /generate-image` â€” `{ "prompt", "seed" }` â†’ a SFW likeness still.
+- `GET /media/{name}` â€” serves generated files from `AVATAR_WORK_DIR`.
 
 Config is environment-driven; see `.env.example`.
 
@@ -118,9 +118,9 @@ Channels (all clothed / SFW; the media gate fails closed on each):
 | Lifestyle / beach | `POST /generate` (`lifestyle`) | photoreal image batches in platform sizes |
 | TikTok | `POST /generate` (`tiktok`) | 9:16 video (frame-gated) + hook/caption, trend hook |
 | Product / dropship | `POST /generate/product-ad` | persona models a product + ad copy |
-| Meta ads | `POST /generate/meta-ad` | ad-set draft: image variants × copy variants |
+| Meta ads | `POST /generate/meta-ad` | ad-set draft: image variants Ã— copy variants |
 
-Generation runs on **hosted APIs** (fal.ai by default — Flux image gen, Flux LoRA
+Generation runs on **hosted APIs** (fal.ai by default â€” Flux image gen, Flux LoRA
 training, Kling image-to-video). Set `AVATAR_PROVIDER=fal` and `FAL_KEY`. Use
 `AVATAR_PROVIDER=fake` for offline/dev. Personas, products, and a safety-screened
 content queue live in a local SQLite store (`AVATAR_DB_URL`), structured to move to
@@ -129,7 +129,7 @@ Postgres + object storage later.
 Persona / content endpoints: `POST/GET /personas`, `POST /personas/{id}/train`,
 `POST /products`, `POST /generate*`, `GET /content`, `POST /content/{id}/review`.
 Generated content lands in `review_status=pending`; **nothing publishes without an
-explicit human approval**. Publishing to TikTok/Meta is scaffolded but deferred —
+explicit human approval**. Publishing to TikTok/Meta is scaffolded but deferred â€”
 it refuses to post un-approved content and stays in dry-run until you complete
 TikTok's audit / Meta's App Review + Business Verification.
 
@@ -147,6 +147,20 @@ backend via a proxy, so provider keys never reach the client.
 See `PLAN.md` for the full build plan and `reviews/research-fal-meta-tiktok.md` for
 the API specifics (and the items to verify before spending on live generation).
 
+## Adult mode policy spine
+
+The Creator Studio remains SFW by default. This branch adds an isolated adult-mode
+policy preflight for future Fanvue/Telegram/CRM workflows; it does **not** convert
+existing SFW generation endpoints into adult generators.
+
+- Adult mode is off unless `AVATAR_ADULT_MODE_ENABLED=true`.
+- Adult platform targets are allowlisted with `AVATAR_ADULT_ALLOWED_PLATFORMS`.
+- `/adult/policy-check` blocks before provider calls unless consent, age
+  verification, AI disclosure, and platform eligibility are present.
+- Human review remains required by default before delivery or publishing.
+- Prohibited adult requests are blocked even when adult mode is enabled.
+
+See `ADULT_MODE.md` for the CRM boundary and Telegram delivery plan.
 ## Development / tests
 
 The orchestration and text-safety core are covered by fast, GPU-free tests:
@@ -166,5 +180,6 @@ This is the foundation. To finish a production deployment you'll likely want:
 - auth, rate limiting, and TLS in front of the API,
 - channel front-ends (web embed, etc.) calling `/chat`.
 
-Keep the safety gates in place — they're what make this the SFW system it's
+Keep the safety gates in place â€” they're what make this the SFW system it's
 meant to be.
+

@@ -14,6 +14,13 @@ def _env(key: str, default: str) -> str:
     return os.environ.get(key, default)
 
 
+def _env_bool(key: str, default: bool) -> bool:
+    value = os.environ.get(key)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 @dataclass
 class Settings:
     # Paths
@@ -43,6 +50,13 @@ class Settings:
     nsfw_classifier: str = _env("AVATAR_NSFW_CLASSIFIER", "Falconsai/nsfw_image_detection")
     nsfw_threshold: float = float(_env("AVATAR_NSFW_THRESHOLD", "0.7"))
 
+    # Adult-mode policy spine. Disabled by default; the existing SFW endpoints do
+    # not read this flag. Adult endpoints must still enforce consent, age, AI
+    # disclosure, platform eligibility, and human review.
+    adult_mode_enabled: bool = _env_bool("AVATAR_ADULT_MODE_ENABLED", False)
+    adult_allowed_platforms: str = _env("AVATAR_ADULT_ALLOWED_PLATFORMS", "fanvue,telegram")
+    adult_require_human_review: bool = _env_bool("AVATAR_ADULT_REQUIRE_HUMAN_REVIEW", True)
+
     # Hosted generation provider (creator content channels)
     provider: str = _env("AVATAR_PROVIDER", "fal")
     fal_key: str = _env("FAL_KEY", "")
@@ -58,3 +72,4 @@ class Settings:
     @classmethod
     def from_env(cls) -> "Settings":
         return cls()
+
