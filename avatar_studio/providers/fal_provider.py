@@ -27,16 +27,45 @@ _MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024  # cap response size to avoid OOM DoS
 
 
 def _host_allowed(host: str) -> bool:
-    host = (host or "").lower()
-    # Reject IP-literal hosts outright (and any private/loopback/link-local range).
+    """Pure hostname allowlist (no DNS): host must be (or be a subdomain of) a fal
+    apex. Raw IP literals are NEVER allowed — a bare IP can't be a fal CDN host, and
+    auto-allowing public IPs would defeat the allowlist (SSRF). DNS-resolution
+    validation (rebinding defense) happens in _resolve_safe at download time."""
     import ipaddress
 
+    host = (host or "").lower().strip("[]")  # strip IPv6 brackets
     try:
-        ip = ipaddress.ip_address(host)
-        return not (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved)
+        ipaddress.ip_address(host)
+        return False
     except ValueError:
-        pass  # not an IP literal — fall through to the apex allowlist
+        pass  # not an IP literal — apply the apex allowlist
     return any(host == a or host.endswith("." + a) for a in _ALLOWED_DOWNLOAD_APEXES)
+
+
+def _resolve_safe(host: str) -> bool:
+    """Resolve host and reject if ANY address is internal (DNS-rebinding defense)."""
+    import ipaddress
+    import socket
+
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        return False
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0].split("%")[0])
+        except ValueError:
+            return False
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_reserved
+            or ip.is_multicast
+            or ip.is_unspecified
+        ):
+            return False
+    return True
 
 # Logical aspect ratio -> Flux image_size (preset string or {width,height}).
 _IMAGE_SIZE: dict[str, object] = {
@@ -72,29 +101,45 @@ class FalProvider:
         return self.client
 
     @staticmethod
-    def _download(url: str, *, max_bytes: int = _MAX_DOWNLOAD_BYTES) -> bytes:
+    def _download(
+        url: str, *, max_bytes: int = _MAX_DOWNLOAD_BYTES, max_redirects: int = 5
+    ) -> bytes:
         import urllib.parse
 
         import requests
 
-        if not isinstance(url, str) or not url.startswith("https://"):
-            # Require https for provider media (blocks file://, http://, etc.).
-            raise ValueError("provider returned a non-https media url")
-        host = urllib.parse.urlparse(url).hostname or ""
-        if not _host_allowed(host):
-            raise ValueError(f"refusing to download from disallowed host {host!r}")
+        # Redirects are followed MANUALLY with full re-validation each hop —
+        # requests' default redirect following would let a 302 -> 169.254.169.254
+        # bypass the allowlist (SSRF).
+        current = url
+        for _hop in range(max_redirects + 1):
+            if not isinstance(current, str) or not current.startswith("https://"):
+                raise ValueError("provider returned a non-https media url")
+            host = urllib.parse.urlparse(current).hostname or ""
+            if not _host_allowed(host) or not _resolve_safe(host):
+                raise ValueError(f"refusing to download from disallowed host {host!r}")
 
-        # Stream and enforce a hard size cap; Content-Length is attacker-controlled
-        # so we count bytes as they arrive rather than trusting the header.
-        with requests.get(url, timeout=120, stream=True) as resp:
-            resp.raise_for_status()
-            chunks, total = [], 0
-            for chunk in resp.iter_content(chunk_size=65536):
-                total += len(chunk)
-                if total > max_bytes:
-                    raise ValueError("provider media exceeds max download size")
-                chunks.append(chunk)
-        return b"".join(chunks)
+            resp = requests.get(current, timeout=120, stream=True, allow_redirects=False)
+            if resp.is_redirect or resp.status_code in (301, 302, 303, 307, 308):
+                location = resp.headers.get("Location")
+                resp.close()
+                if not location:
+                    raise ValueError("redirect with no Location header")
+                current = urllib.parse.urljoin(current, location)
+                continue
+
+            # Terminal response — stream with a hard size cap (Content-Length is
+            # attacker-controlled, so count bytes as they arrive).
+            with resp:
+                resp.raise_for_status()
+                chunks, total = [], 0
+                for chunk in resp.iter_content(chunk_size=65536):
+                    total += len(chunk)
+                    if total > max_bytes:
+                        raise ValueError("provider media exceeds max download size")
+                    chunks.append(chunk)
+            return b"".join(chunks)
+        raise ValueError("too many redirects")
 
     def generate_image(
         self,
@@ -127,10 +172,21 @@ class FalProvider:
         for i, img in enumerate(images):
             if not isinstance(img, dict) or "url" not in img:
                 raise ValueError("fal image item missing 'url'")
+            # Per-image seed if fal returns one; the batch seed only describes the
+            # first image, so don't mislabel the rest with it.
+            if "seed" in img:
+                img_seed = img.get("seed")
+            elif i == 0:
+                img_seed = result.get("seed")
+            else:
+                img_seed = None
             out.append(
                 ImageResult(
                     data=self._download(img["url"]),
-                    seed=result.get("seed") if isinstance(result, dict) else None,
+                    seed=img_seed,
+                    # nsfw_flag is a cheap pre-gate hint only; the media gate is the
+                    # authoritative fail-closed screen, so an absent flag (False
+                    # here) still gets caught downstream.
                     nsfw_flag=bool(nsfw_flags[i]) if i < len(nsfw_flags) else False,
                     width=img.get("width"),
                     height=img.get("height"),
@@ -155,7 +211,13 @@ class FalProvider:
         video = result.get("video") if isinstance(result, dict) else None
         if not isinstance(video, dict) or "url" not in video:
             raise ValueError("fal video response missing 'video.url'")
-        return VideoResult(data=self._download(video["url"]))
+        # Pass through the provider NSFW hint when present (cheap early drop; the
+        # media gate frame-samples the video regardless).
+        nsfw_flags = result.get("has_nsfw_concepts") or []
+        return VideoResult(
+            data=self._download(video["url"]),
+            nsfw_flag=bool(nsfw_flags[0]) if nsfw_flags else False,
+        )
 
     def train_lora(self, images_zip_url, *, trigger_word, steps=1000):
         args = {

@@ -96,3 +96,51 @@ def test_download_rejects_non_https():
 def test_download_rejects_disallowed_host():
     with pytest.raises(ValueError):
         FalProvider._download("https://169.254.169.254/latest/meta-data/")
+
+
+def test_host_allowlist_rejects_public_ip_literal():
+    # A bare public IP is never a fal CDN host (closes the public-IP escape hatch).
+    assert _host_allowed("93.184.216.34") is False
+
+
+def test_resolve_safe_rejects_private_and_allows_public(monkeypatch):
+    import socket
+
+    from avatar_studio.providers import fal_provider
+
+    monkeypatch.setattr(
+        socket, "getaddrinfo", lambda *a, **k: [(2, 1, 6, "", ("10.0.0.5", 0))]
+    )
+    assert fal_provider._resolve_safe("rebind.fal.media") is False
+    monkeypatch.setattr(
+        socket, "getaddrinfo", lambda *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))]
+    )
+    assert fal_provider._resolve_safe("v3.fal.media") is True
+
+
+def test_download_does_not_follow_redirect_to_metadata(monkeypatch):
+    # A 302 from an allowed host pointing at the metadata IP must NOT be followed.
+    from avatar_studio.providers import fal_provider
+
+    monkeypatch.setattr(fal_provider, "_resolve_safe", lambda host: True)
+    calls = {"n": 0}
+
+    class FakeResp:
+        is_redirect = True
+        status_code = 302
+        headers = {"Location": "https://169.254.169.254/latest/meta-data/"}
+
+        def close(self):
+            pass
+
+    import requests
+
+    def fake_get(url, **kwargs):
+        calls["n"] += 1
+        assert kwargs.get("allow_redirects") is False  # redirects handled manually
+        return FakeResp()
+
+    monkeypatch.setattr(requests, "get", fake_get)
+    with pytest.raises(ValueError):
+        FalProvider._download("https://v3.fal.media/img.png")
+    assert calls["n"] == 1  # never issued the second GET to the metadata host

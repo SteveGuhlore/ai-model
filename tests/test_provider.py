@@ -81,6 +81,23 @@ def test_fal_generate_with_lora_switches_model(monkeypatch):
     assert args["loras"][0]["path"] == "https://lora"
 
 
+def test_fal_per_image_seed_not_shared(monkeypatch):
+    client = _FakeFalClient(
+        {
+            "images": [
+                {"url": "https://fal/a.png", "seed": 11},
+                {"url": "https://fal/b.png", "seed": 22},
+            ],
+            "seed": 11,
+            "has_nsfw_concepts": [False, False],
+        }
+    )
+    prov = FalProvider(client=client)
+    monkeypatch.setattr(FalProvider, "_download", staticmethod(lambda url: b"X"))
+    imgs = prov.generate_image("p", negative="n", aspect_ratio="1:1", n=2)
+    assert [i.seed for i in imgs] == [11, 22]  # each image keeps its own seed
+
+
 def test_fal_rejects_malformed_response():
     prov = FalProvider(client=_FakeFalClient({"unexpected": True}))
     with pytest.raises(ValueError):
