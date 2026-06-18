@@ -40,3 +40,54 @@ def build_face_generator(settings: Settings):
     from avatar_studio.face.generate import FaceGenerator
 
     return FaceGenerator(settings.sdxl_base, settings.lora_path, settings.device)
+
+
+def build_provider(settings: Settings):
+    """Construct the hosted generation provider for the content channels."""
+    if settings.provider == "fal":
+        from avatar_studio.providers.fal_provider import FalProvider
+
+        return FalProvider()
+    if settings.provider == "fake":
+        from avatar_studio.providers.fake import FakeProvider
+
+        return FakeProvider()
+    raise ValueError(f"unknown provider {settings.provider!r}")
+
+
+def build_media_gate(settings: Settings):
+    """The single NSFW media gate used by every content channel."""
+    from avatar_studio.safety.image_filter import NSFWImageClassifier
+
+    return NSFWImageClassifier(
+        settings.nsfw_classifier, settings.nsfw_threshold, settings.device
+    )
+
+
+def build_store(settings: Settings):
+    from avatar_studio.store.sqlite_store import SqliteStore
+
+    return SqliteStore(settings.db_url, settings.media_dir)
+
+
+def build_copywriter(settings: Settings):
+    """Persona-voiced copywriter backed by the local LLM brain."""
+    from avatar_studio.copy.writer import Copywriter
+    from avatar_studio.persona.ollama_backend import OllamaPersona
+
+    llm = OllamaPersona(settings.ollama_url, settings.ollama_model, settings.persona_name)
+    return Copywriter(llm)
+
+
+def build_gen_context(settings: Settings, store=None):
+    """Assemble the channel GenContext (provider + gates + store) in one place."""
+    from avatar_studio.channels.base import GenContext
+    from avatar_studio.safety.text_filter import TextSafety
+
+    return GenContext(
+        provider=build_provider(settings),
+        media_gate=build_media_gate(settings),
+        text_gate=TextSafety(),
+        store=store or build_store(settings),
+        media_dir=settings.media_dir,
+    )

@@ -105,6 +105,48 @@ cd docker && docker compose up --build
 
 Config is environment-driven; see `.env.example`.
 
+## Creator Studio (multi-persona content engine)
+
+Layered on the core above is a SFW **creator + commerce** engine: manage multiple
+personas trained on your own likeness and generate on-brand content for several
+channels, with **every output passing the same safety gates**.
+
+Channels (all clothed / SFW; the media gate fails closed on each):
+
+| Channel | Endpoint | Output |
+|---|---|---|
+| Lifestyle / beach | `POST /generate` (`lifestyle`) | photoreal image batches in platform sizes |
+| TikTok | `POST /generate` (`tiktok`) | 9:16 video (frame-gated) + hook/caption, trend hook |
+| Product / dropship | `POST /generate/product-ad` | persona models a product + ad copy |
+| Meta ads | `POST /generate/meta-ad` | ad-set draft: image variants × copy variants |
+
+Generation runs on **hosted APIs** (fal.ai by default — Flux image gen, Flux LoRA
+training, Kling image-to-video). Set `AVATAR_PROVIDER=fal` and `FAL_KEY`. Use
+`AVATAR_PROVIDER=fake` for offline/dev. Personas, products, and a safety-screened
+content queue live in a local SQLite store (`AVATAR_DB_URL`), structured to move to
+Postgres + object storage later.
+
+Persona / content endpoints: `POST/GET /personas`, `POST /personas/{id}/train`,
+`POST /products`, `POST /generate*`, `GET /content`, `POST /content/{id}/review`.
+Generated content lands in `review_status=pending`; **nothing publishes without an
+explicit human approval**. Publishing to TikTok/Meta is scaffolded but deferred —
+it refuses to post un-approved content and stays in dry-run until you complete
+TikTok's audit / Meta's App Review + Business Verification.
+
+### Dashboard (Next.js)
+
+```bash
+uvicorn avatar_studio.api.app:app --port 8000      # backend
+cd dashboard && npm install && npm run dev          # http://localhost:3000
+```
+
+Manage personas, run generation batches, and work the **review queue** (approve/
+reject each asset, with its SFW status shown). The browser only talks to the
+backend via a proxy, so provider keys never reach the client.
+
+See `PLAN.md` for the full build plan and `reviews/research-fal-meta-tiktok.md` for
+the API specifics (and the items to verify before spending on live generation).
+
 ## Development / tests
 
 The orchestration and text-safety core are covered by fast, GPU-free tests:

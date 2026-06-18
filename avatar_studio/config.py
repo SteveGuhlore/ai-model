@@ -43,6 +43,15 @@ class Settings:
     nsfw_classifier: str = _env("AVATAR_NSFW_CLASSIFIER", "Falconsai/nsfw_image_detection")
     nsfw_threshold: float = float(_env("AVATAR_NSFW_THRESHOLD", "0.7"))
 
+    # Hosted generation provider (creator content channels)
+    provider: str = _env("AVATAR_PROVIDER", "fal")
+    fal_key: str = _env("FAL_KEY", "")
+
+    # Storage (local-first; structured to move to Postgres + object storage later)
+    db_url: str = _env("AVATAR_DB_URL", "sqlite:///creator.db")
+    media_dir: str = _env("AVATAR_MEDIA_DIR", "media")
+    storage_backend: str = _env("AVATAR_STORAGE", "local")
+
     # Compute
     device: str = _env("AVATAR_DEVICE", "cuda")
 

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import glob
 import os
+import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -25,6 +26,7 @@ class NSFWImageClassifier:
     model_name: str
     threshold: float = 0.7
     device: str = "cuda"
+    ffmpeg_timeout_s: int = 120
     _clf: Optional[object] = None
 
     def _load(self):
@@ -43,17 +45,28 @@ class NSFWImageClassifier:
 
         ext = os.path.splitext(media_path)[1].lower()
         if ext in _IMAGE_EXTS:
-            return [Image.open(media_path).convert("RGB")]
+            # Load into memory and close the on-disk handle (no FD leak).
+            with Image.open(media_path) as im:
+                return [im.convert("RGB").copy()]
 
+        # Extract frames to a temp dir; always remove it (even on timeout/error),
+        # and never let a temp dir or file descriptor leak per screened video.
         tmp = tempfile.mkdtemp()
-        subprocess.run(
-            ["ffmpeg", "-i", media_path, "-vf", "fps=1", os.path.join(tmp, "f_%04d.png")],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        paths = sorted(glob.glob(os.path.join(tmp, "*.png")))
-        return [Image.open(p).convert("RGB") for p in paths]
+        try:
+            subprocess.run(
+                ["ffmpeg", "-i", media_path, "-vf", "fps=1", os.path.join(tmp, "f_%04d.png")],
+                check=True,
+                timeout=self.ffmpeg_timeout_s,  # pathological media can't hang a worker
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            frames = []
+            for p in sorted(glob.glob(os.path.join(tmp, "*.png"))):
+                with Image.open(p) as im:
+                    frames.append(im.convert("RGB").copy())
+            return frames
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
 
     def is_sfw(self, media_path: str) -> bool:
         try:
