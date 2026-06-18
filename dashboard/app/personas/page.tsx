@@ -16,6 +16,7 @@ export default function PersonasPage() {
 
   async function load() {
     try {
+      setError("");
       setPersonas(await api.listPersonas());
     } catch (e) {
       setError(String(e));
@@ -132,11 +133,11 @@ export default function PersonasPage() {
 }
 
 function StatusDot({ status }: { status: Persona["status"] }) {
-  const map: Record<Persona["status"], string> = {
+  const map: Record<string, string> = {
     ready: "text-ok",
     training: "text-warn",
     failed: "text-danger",
     draft: "text-neutral-500",
   };
-  return <span className={`text-xs ${map[status]}`}>{status}</span>;
+  return <span className={`text-xs ${map[status] ?? "text-neutral-500"}`}>{status}</span>;
 }

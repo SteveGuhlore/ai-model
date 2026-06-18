@@ -64,3 +64,11 @@ def test_product_round_trip(tmp_path):
     s = make_store(tmp_path)
     p = s.create_product(Product(name="Lace set", category="intimates"))
     assert s.get_product(p.id).category == "intimates"
+
+
+def test_list_products(tmp_path):
+    s = make_store(tmp_path)
+    assert s.list_products() == []
+    s.create_product(Product(name="A"))
+    s.create_product(Product(name="B"))
+    assert {p.name for p in s.list_products()} == {"A", "B"}

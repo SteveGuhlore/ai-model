@@ -156,10 +156,18 @@ class ProductIn(BaseModel):
     source_image: str = ""
 
 
+def _product_out(p: Product) -> dict:
+    return {"id": p.id, "name": p.name, "category": p.category, "description": p.description}
+
+
 @router.post("/products")
 def create_product(inp: ProductIn):
-    p = store().create_product(Product(**inp.model_dump()))
-    return {"id": p.id, "name": p.name, "category": p.category}
+    return _product_out(store().create_product(Product(**inp.model_dump())))
+
+
+@router.get("/products")
+def list_products():
+    return [_product_out(p) for p in store().list_products()]
 
 
 @router.get("/content")

@@ -31,7 +31,7 @@ export const api = {
       body: JSON.stringify({ images_zip_url }),
     }),
 
-  listProducts: () => req<Product[]>("/products").catch(() => [] as Product[]),
+  listProducts: () => req<Product[]>("/products"),
   createProduct: (body: Partial<Product>) =>
     req<Product>("/products", { method: "POST", body: JSON.stringify(body) }),
 

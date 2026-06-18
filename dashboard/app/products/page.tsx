@@ -13,9 +13,17 @@ export default function ProductsPage() {
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
 
+  const [busyAd, setBusyAd] = useState<string | null>(null);
+
   async function load() {
-    setProducts(await api.listProducts());
-    setPersonas(await api.listPersonas());
+    try {
+      setError("");
+      const [prods, peeps] = await Promise.all([api.listProducts(), api.listPersonas()]);
+      setProducts(prods);
+      setPersonas(peeps);
+    } catch (e) {
+      setError(String(e));
+    }
   }
   useEffect(() => {
     load();
@@ -36,11 +44,14 @@ export default function ProductsPage() {
 
   async function makeAd(productId: string) {
     setStatus("");
-    const persona = personas.find((p) => p.status === "ready") || personas[0];
+    setError("");
+    // Require a fully-trained persona — don't silently fall back to an untrained one.
+    const persona = personas.find((p) => p.status === "ready");
     if (!persona) {
-      setError("Create and train a persona first.");
+      setError("Train a persona (status 'ready') before generating product ads.");
       return;
     }
+    setBusyAd(productId);
     try {
       setStatus("Generating ad creatives…");
       const { job_id } = await api.generateProductAd({
@@ -54,6 +65,8 @@ export default function ProductsPage() {
       setStatus(`${res.created} ad creative(s) sent to the review queue.`);
     } catch (e) {
       setError(String(e));
+    } finally {
+      setBusyAd(null);
     }
   }
 
@@ -114,9 +127,10 @@ export default function ProductsPage() {
               </div>
               <button
                 onClick={() => makeAd(p.id)}
-                className="rounded-md bg-surface-800 px-3 py-1.5 text-xs font-medium text-neutral-200 hover:bg-surface-700"
+                disabled={busyAd !== null}
+                className="rounded-md bg-surface-800 px-3 py-1.5 text-xs font-medium text-neutral-200 hover:bg-surface-700 disabled:opacity-40"
               >
-                Make ad
+                {busyAd === p.id ? "Generating…" : "Make ad"}
               </button>
             </li>
           ))

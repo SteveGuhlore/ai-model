@@ -25,10 +25,13 @@ function GenerateInner() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    api.listPersonas().then((p) => {
-      setPersonas(p);
-      if (!personaId && p[0]) setPersonaId(p[0].id);
-    });
+    api
+      .listPersonas()
+      .then((p) => {
+        setPersonas(p);
+        if (!personaId && p[0]) setPersonaId(p[0].id);
+      })
+      .catch((e) => setError(String(e)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -124,7 +127,10 @@ function GenerateInner() {
             min={1}
             max={12}
             value={count}
-            onChange={(e) => setCount(Number(e.target.value))}
+            onChange={(e) =>
+              // Clamp client-side too (the backend also bounds it 1..12).
+              setCount(Math.min(12, Math.max(1, Math.floor(Number(e.target.value) || 1))))
+            }
             className="mt-1 w-full rounded-md border border-surface-700 bg-surface-950 px-3 py-2 text-sm text-neutral-100"
           />
         </label>

@@ -144,6 +144,13 @@ class SqliteStore:
             self._conn.commit()
         return product
 
+    def list_products(self) -> list[Product]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM products ORDER BY created_at DESC"
+            ).fetchall()
+        return [self._row_to_product(r) for r in rows]
+
     def get_product(self, product_id: str) -> Product | None:
         with self._lock:
             row = self._conn.execute(
@@ -151,6 +158,10 @@ class SqliteStore:
             ).fetchone()
         if not row:
             return None
+        return self._row_to_product(row)
+
+    @staticmethod
+    def _row_to_product(row: sqlite3.Row) -> Product:
         return Product(
             id=row["id"],
             name=row["name"],

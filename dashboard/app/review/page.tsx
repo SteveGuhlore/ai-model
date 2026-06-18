@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import type { Content } from "@/lib/types";
 import { ReviewBadge, SafetyBadge } from "@/components/safety-badge";
@@ -11,13 +11,20 @@ export default function ReviewPage() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("pending");
   const [items, setItems] = useState<Content[] | null>(null);
   const [error, setError] = useState("");
+  const reqId = useRef(0);
 
   async function load() {
+    const id = ++reqId.current; // ignore stale responses from rapid filter changes
     setItems(null);
+    setError("");
     try {
-      setItems(await api.listContent({ review_status: filter }));
+      const got = await api.listContent({ review_status: filter });
+      if (id === reqId.current) setItems(got);
     } catch (e) {
-      setError(String(e));
+      if (id === reqId.current) {
+        setError(String(e));
+        setItems([]); // don't leave the grid stuck on the loading skeleton
+      }
     }
   }
   useEffect(() => {

@@ -12,12 +12,15 @@ const REVIEW: Record<ReviewStatus, { label: string; cls: string }> = {
   rejected: { label: "rejected", cls: "text-danger" },
 };
 
+const UNKNOWN = { label: "unknown", cls: "text-neutral-400" };
+
 export function SafetyBadge({ status }: { status: SafetyStatus }) {
-  const s = SAFETY[status];
+  // Fall back gracefully if the backend ever sends an unexpected status.
+  const s = SAFETY[status] ?? UNKNOWN;
   return <span className={`text-xs font-medium ${s.cls}`}>{s.label}</span>;
 }
 
 export function ReviewBadge({ status }: { status: ReviewStatus }) {
-  const s = REVIEW[status];
+  const s = REVIEW[status] ?? UNKNOWN;
   return <span className={`text-xs font-medium ${s.cls}`}>{s.label}</span>;
 }
