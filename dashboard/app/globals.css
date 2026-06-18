@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-surface-950 text-neutral-200 antialiased;
+}
+
+/* Honest skeleton — stable box at the media aspect ratio, no layout shift. */
+.skeleton {
+  @apply animate-pulse bg-surface-800 rounded-card;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
