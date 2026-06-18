@@ -22,20 +22,16 @@
     "**/auth/**",
     "**/publishing/**"
   ],
-  "extensions": {
-    "python": {
-      "include": ["avatar_studio/**/*.py", "tests/**/*.py", "scripts/**/*.py"],
-      "linter": "ruff",
-      "test": "pytest"
-    },
-    "typescript": {
-      "include": ["dashboard/**/*.{ts,tsx}"],
-      "linter": "eslint",
-      "test": "vitest"
-    }
-  },
+  "extensions": [".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".css"],
   "validation": {
-    "default": "pytest -q && ruff check avatar_studio tests"
+    "default": [
+      ".venv/Scripts/python.exe -m pytest -q",
+      ".venv/Scripts/python.exe -m ruff check avatar_studio tests"
+    ]
+  },
+  "extensionsByLanguage": {
+    "python": { "include": ["avatar_studio/**/*.py", "tests/**/*.py"], "linter": "ruff", "test": "pytest" },
+    "typescript": { "include": ["dashboard/**/*.{ts,tsx}"], "linter": "eslint", "test": "vitest" }
   },
   "gates": {
     "ladder": [
