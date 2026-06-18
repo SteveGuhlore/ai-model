@@ -29,3 +29,19 @@ export interface Product {
   name: string;
   category: string;
 }
+
+export type JobStatus = "queued" | "running" | "succeeded" | "failed";
+
+export interface Job<T = unknown> {
+  id: string;
+  kind: string;
+  status: JobStatus;
+  persona_id: string | null;
+  result: T | null;
+  error: string;
+}
+
+export interface GenerateResult {
+  created: number;
+  content: Content[];
+}

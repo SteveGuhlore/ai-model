@@ -39,6 +39,28 @@ class ReviewStatus(str, Enum):
     REJECTED = "rejected"
 
 
+class JobStatus(str, Enum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+@dataclass
+class Job:
+    """A tracked background unit of work (training / generation batch)."""
+
+    kind: str
+    status: JobStatus = JobStatus.QUEUED
+    persona_id: str | None = None
+    params: str = "{}"  # JSON-encoded request params
+    result: str = ""  # JSON-encoded result on success
+    error: str = ""
+    id: str = field(default_factory=lambda: new_id("job"))
+    created_at: float = field(default_factory=now)
+    updated_at: float = field(default_factory=now)
+
+
 @dataclass
 class Persona:
     name: str

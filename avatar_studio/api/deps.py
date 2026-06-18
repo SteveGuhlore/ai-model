@@ -12,6 +12,7 @@ from avatar_studio.config import Settings
 _settings = Settings.from_env()
 _store = None
 _registry = None
+_job_runner = None
 
 
 def settings() -> Settings:
@@ -48,3 +49,13 @@ def copywriter():
     from avatar_studio.factory import build_copywriter
 
     return build_copywriter(_settings)
+
+
+def job_runner():
+    """Process-wide background job runner (threaded). Tests swap in inline mode."""
+    global _job_runner
+    if _job_runner is None:
+        from avatar_studio.jobs.runner import JobRunner
+
+        _job_runner = JobRunner(store(), inline=False)
+    return _job_runner

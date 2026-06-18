@@ -2,6 +2,8 @@
 
 from avatar_studio.store.models import (
     Content,
+    Job,
+    JobStatus,
     Persona,
     PersonaStatus,
     Product,
@@ -15,7 +17,9 @@ __all__ = [
     "Persona",
     "Product",
     "Content",
+    "Job",
     "PersonaStatus",
     "SafetyStatus",
     "ReviewStatus",
+    "JobStatus",
 ]

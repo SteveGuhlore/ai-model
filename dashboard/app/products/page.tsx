@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import type { Persona, Product } from "@/lib/types";
+import type { GenerateResult, Persona, Product } from "@/lib/types";
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -42,13 +42,15 @@ export default function ProductsPage() {
       return;
     }
     try {
-      const res = await api.generateProductAd({
+      setStatus("Generating ad creatives…");
+      const { job_id } = await api.generateProductAd({
         persona_id: persona.id,
         product_id: productId,
         prompt: "studio product shot, clean background",
         placements: ["ig_portrait"],
         count: 4,
       });
+      const res = await api.pollJob<GenerateResult>(job_id);
       setStatus(`${res.created} ad creative(s) sent to the review queue.`);
     } catch (e) {
       setError(String(e));

@@ -1,4 +1,4 @@
-import type { Content, Persona, Product } from "./types";
+import type { Content, GenerateResult, Job, Persona, Product } from "./types";
 
 // All calls go through the Next proxy (/api -> FastAPI). No secrets client-side.
 const BASE = "/api";
@@ -35,16 +35,33 @@ export const api = {
   createProduct: (body: Partial<Product>) =>
     req<Product>("/products", { method: "POST", body: JSON.stringify(body) }),
 
+  // Generation + training are async: they return a job id; poll getJob/pollJob.
   generate: (body: Record<string, unknown>) =>
-    req<{ created: number; content: Content[] }>("/generate", {
+    req<{ job_id: string; status: string }>("/generate", {
       method: "POST",
       body: JSON.stringify(body),
     }),
   generateProductAd: (body: Record<string, unknown>) =>
-    req<{ created: number; content: Content[] }>("/generate/product-ad", {
+    req<{ job_id: string; status: string }>("/generate/product-ad", {
       method: "POST",
       body: JSON.stringify(body),
     }),
+
+  getJob: <T = unknown>(id: string) => req<Job<T>>(`/jobs/${id}`),
+
+  async pollJob<T = unknown>(
+    id: string,
+    { intervalMs = 1500, timeoutMs = 600000 }: { intervalMs?: number; timeoutMs?: number } = {},
+  ): Promise<T> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const job = await req<Job<T>>(`/jobs/${id}`);
+      if (job.status === "succeeded") return job.result as T;
+      if (job.status === "failed") throw new Error(job.error || "job failed");
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
+    throw new Error("job timed out");
+  },
 
   listContent: (params: { persona_id?: string; review_status?: string } = {}) => {
     const q = new URLSearchParams(params as Record<string, string>).toString();

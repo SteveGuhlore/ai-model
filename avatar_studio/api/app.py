@@ -24,12 +24,14 @@ from avatar_studio.factory import build_face_generator, build_pipeline
 settings = Settings.from_env()
 app = FastAPI(title="Avatar Studio (SFW)", version="0.1.0")
 
-# Creator-studio routers (personas, generation, content review).
+# Creator-studio routers (personas, generation, content review, jobs).
 from avatar_studio.api.routers import generate as _generate_router  # noqa: E402
+from avatar_studio.api.routers import jobs as _jobs_router  # noqa: E402
 from avatar_studio.api.routers import personas as _personas_router  # noqa: E402
 
 app.include_router(_personas_router.router)
 app.include_router(_generate_router.router)
+app.include_router(_jobs_router.router)
 
 _pipeline = None
 _face = None

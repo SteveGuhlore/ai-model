@@ -42,9 +42,22 @@ def client(tmp_path, monkeypatch):
 
     monkeypatch.setattr(factory, "build_copywriter", lambda s: Copywriter(FixedLLM()))
 
+    # Run jobs inline so training/generation complete synchronously (deterministic).
+    from avatar_studio.jobs.runner import JobRunner
+
+    deps._job_runner = JobRunner(deps.store(), inline=True)
+
     from fastapi.testclient import TestClient
 
     return TestClient(app_mod.app)
+
+
+def run_job(client, resp):
+    """Given a 202 {job_id} response, return the (inline-completed) job result."""
+    assert resp.status_code == 202, resp.text
+    job = client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "succeeded", job
+    return job["result"]
 
 
 def test_health(client):
@@ -65,13 +78,11 @@ def test_generate_flow_and_review(client):
     ).json()["id"]
     client.post(f"/personas/{pid}/train", json={"images_zip_url": "https://x/i.zip"})
 
-    g = client.post(
+    body = run_job(client, client.post(
         "/generate",
         json={"persona_id": pid, "channel": "lifestyle", "prompt": "on the beach",
               "placements": ["tiktok"], "count": 2},
-    )
-    assert g.status_code == 200
-    body = g.json()
+    ))
     assert body["created"] == 2
     cid = body["content"][0]["id"]
     assert body["content"][0]["review_status"] == "pending"
@@ -104,39 +115,46 @@ def _ready_persona(client):
 
 def test_tiktok_channel_generates_video(client):
     pid = _ready_persona(client)
-    g = client.post(
+    body = run_job(client, client.post(
         "/generate",
         json={"persona_id": pid, "channel": "tiktok", "prompt": "beach trend", "count": 2},
-    )
-    assert g.status_code == 200
-    assert g.json()["created"] == 2
-    assert all(c["kind"] == "video" for c in g.json()["content"])
+    ))
+    assert body["created"] == 2
+    assert all(c["kind"] == "video" for c in body["content"])
 
 
 def test_product_ad_endpoint(client):
     pid = _ready_persona(client)
     prod = client.post("/products", json={"name": "Lace set", "category": "intimates"}).json()["id"]
-    g = client.post(
+    body = run_job(client, client.post(
         "/generate/product-ad",
         json={"persona_id": pid, "product_id": prod, "prompt": "studio",
               "placements": ["ig_portrait"], "count": 2},
-    )
-    assert g.status_code == 200
-    assert g.json()["created"] == 2
+    ))
+    assert body["created"] == 2
 
 
 def test_meta_ad_endpoint(client):
     pid = _ready_persona(client)
-    g = client.post(
+    body = run_job(client, client.post(
         "/generate/meta-ad",
         json={"persona_id": pid, "prompt": "lifestyle",
               "placements": ["ig_square", "ig_portrait"], "count": 1, "copy_variants": 2},
-    )
-    assert g.status_code == 200
-    body = g.json()
+    ))
     assert len(body["creatives"]) == 2
     assert len(body["primary_texts"]) == 2
     assert body["variant_count"] == 4
+
+
+def test_train_returns_job_that_completes(client):
+    pid = client.post(
+        "/personas", json={"name": "Ava", "trigger_word": "ava", "consent_attestation": True}
+    ).json()["id"]
+    res = run_job(client, client.post(
+        f"/personas/{pid}/train", json={"images_zip_url": "https://x/i.zip"}
+    ))
+    assert res["status"] == "ready"
+    assert res["likeness_lora_url"].endswith(".safetensors")
 
 
 def test_count_over_limit_rejected(client):

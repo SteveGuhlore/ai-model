@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
-import type { Content, Persona } from "@/lib/types";
+import type { Content, GenerateResult, Persona } from "@/lib/types";
 
 const CHANNELS = [
   { id: "lifestyle", label: "Lifestyle / beach photos" },
@@ -37,13 +37,15 @@ function GenerateInner() {
     setBusy(true);
     setResult(null);
     try {
-      const res = await api.generate({
+      const { job_id } = await api.generate({
         persona_id: personaId,
         channel,
         prompt,
         placements: [channel === "tiktok" ? "tiktok" : placement],
         count,
       });
+      // Generation runs as a background job; poll until it finishes.
+      const res = await api.pollJob<GenerateResult>(job_id);
       setResult(res.content);
     } catch (e) {
       setError(String(e));

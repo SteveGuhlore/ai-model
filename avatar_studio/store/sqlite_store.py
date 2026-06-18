@@ -14,11 +14,14 @@ from dataclasses import asdict
 
 from avatar_studio.store.models import (
     Content,
+    Job,
+    JobStatus,
     Persona,
     PersonaStatus,
     Product,
     ReviewStatus,
     SafetyStatus,
+    now,
 )
 
 _SCHEMA = """
@@ -36,6 +39,10 @@ CREATE TABLE IF NOT EXISTS content (
     safety_status TEXT NOT NULL, prompt TEXT, copy_text TEXT, media_path TEXT,
     aspect_ratio TEXT, product_id TEXT, review_status TEXT, scheduled_at REAL,
     created_at REAL
+);
+CREATE TABLE IF NOT EXISTS jobs (
+    id TEXT PRIMARY KEY, kind TEXT, status TEXT NOT NULL, persona_id TEXT,
+    params TEXT, result TEXT, error TEXT, created_at REAL, updated_at REAL
 );
 """
 
@@ -222,4 +229,61 @@ class SqliteStore:
             review_status=ReviewStatus(row["review_status"]),
             scheduled_at=row["scheduled_at"],
             created_at=row["created_at"],
+        )
+
+    # --- jobs -----------------------------------------------------------
+    def create_job(self, job: Job) -> Job:
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO jobs VALUES (:id,:kind,:status,:persona_id,:params,"
+                ":result,:error,:created_at,:updated_at)",
+                {**asdict(job), "status": job.status.value},
+            )
+            self._conn.commit()
+        return job
+
+    def get_job(self, job_id: str) -> Job | None:
+        with self._lock:
+            row = self._conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        return self._row_to_job(row) if row else None
+
+    def list_jobs(self, persona_id: str | None = None) -> list[Job]:
+        q = "SELECT * FROM jobs"
+        params: list = []
+        if persona_id:
+            q += " WHERE persona_id=?"
+            params.append(persona_id)
+        q += " ORDER BY created_at DESC"
+        with self._lock:
+            rows = self._conn.execute(q, params).fetchall()
+        return [self._row_to_job(r) for r in rows]
+
+    def update_job(
+        self,
+        job_id: str,
+        *,
+        status: JobStatus,
+        result: str | None = None,
+        error: str | None = None,
+    ) -> None:
+        with self._lock:
+            self._conn.execute(
+                "UPDATE jobs SET status=?, result=COALESCE(?,result),"
+                " error=COALESCE(?,error), updated_at=? WHERE id=?",
+                (status.value, result, error, now(), job_id),
+            )
+            self._conn.commit()
+
+    @staticmethod
+    def _row_to_job(row: sqlite3.Row) -> Job:
+        return Job(
+            id=row["id"],
+            kind=row["kind"],
+            status=JobStatus(row["status"]),
+            persona_id=row["persona_id"],
+            params=row["params"] or "{}",
+            result=row["result"] or "",
+            error=row["error"] or "",
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
         )

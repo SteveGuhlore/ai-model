@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from avatar_studio.api.deps import registry
+from avatar_studio.api.deps import job_runner, registry
 from avatar_studio.personas.registry import ConsentError
 from avatar_studio.store.models import Persona
 
@@ -56,12 +56,23 @@ def get_persona(persona_id: str):
     return _out(p)
 
 
-@router.post("/{persona_id}/train")
+@router.post("/{persona_id}/train", status_code=202)
 def train_persona(persona_id: str, inp: TrainIn):
-    try:
-        p = registry().train_likeness(persona_id, inp.images_zip_url, steps=inp.steps)
-    except KeyError:
+    # Validate synchronously (fast) so 404/403 surface immediately; the actual
+    # 20-40 min training runs as a background job the client polls via /jobs/{id}.
+    persona = registry().get(persona_id)
+    if persona is None:
         raise HTTPException(404, "persona not found")
-    except ConsentError as exc:
-        raise HTTPException(403, str(exc))
-    return _out(p)
+    if not persona.consent_attestation:
+        raise HTTPException(403, "likeness training requires a consent attestation")
+
+    def work():
+        try:
+            p = registry().train_likeness(persona_id, inp.images_zip_url, steps=inp.steps)
+        except ConsentError as exc:  # re-checked defensively inside train_likeness
+            raise RuntimeError(str(exc))
+        return {"persona_id": p.id, "status": p.status.value,
+                "likeness_lora_url": p.likeness_lora_url}
+
+    job = job_runner().submit("train_likeness", work, persona_id=persona_id)
+    return {"job_id": job.id, "status": job.status.value}
