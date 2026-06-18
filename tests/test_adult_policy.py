@@ -14,7 +14,7 @@ def test_adult_policy_disabled_by_default():
     )
     assert result.decision is AdultDecision.DISABLED
     assert not result.allowed
-    assert result.reasons == ["adult_mode_disabled"]
+    assert result.reasons == ["adult_content_mode_disabled"]
 
 
 def test_adult_policy_allows_verified_allowed_platform():
@@ -58,3 +58,4 @@ def test_adult_policy_blocks_prohibited_request_terms():
     )
     assert not result.allowed
     assert "minor_or_age_ambiguous" in result.reasons
+

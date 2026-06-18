@@ -89,7 +89,7 @@ class AdultContentPolicy:
     def from_settings(cls, settings) -> "AdultContentPolicy":
         platforms = str(getattr(settings, "adult_allowed_platforms", "")).split(",")
         return cls(
-            enabled=bool(getattr(settings, "adult_mode_enabled", False)),
+            enabled=bool(getattr(settings, "adult_content_enabled", False)),
             allowed_platforms=platforms,
             require_human_review=bool(getattr(settings, "adult_require_human_review", True)),
         )
@@ -103,7 +103,7 @@ class AdultContentPolicy:
                 AdultDecision.DISABLED,
                 platform=platform,
                 allowed=False,
-                reasons=["adult_mode_disabled"],
+                reasons=["adult_content_mode_disabled"],
                 requires_human_review=self.require_human_review,
             )
 
@@ -139,3 +139,4 @@ class AdultContentPolicy:
 def _classify_prohibited(text: str) -> list[str]:
     value = text or ""
     return [label for label, pattern in _PROHIBITED_PATTERNS if re.search(pattern, value, re.I)]
+

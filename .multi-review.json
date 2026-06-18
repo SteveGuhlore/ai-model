@@ -4,7 +4,7 @@
   "description": "SFW-default multi-persona AI creator + commerce content engine with an isolated adult-mode policy spine for consented, age-verified, AI-disclosed workflows.",
   "constitution": [
     "SFW ROUTES REMAIN SFW. The existing /generate, /generate/product-ad, /generate/meta-ad, /chat, and /generate-image paths MUST keep the SFW text/media gates and clothing policy. Any bypass, disabling flag, lowered threshold, or uncensored-model swap on those routes is a CRITICAL finding.",
-    "ADULT MODE IS ISOLATED AND OFF BY DEFAULT. Adult workflows MUST use explicit adult routes/config, require AVATAR_ADULT_MODE_ENABLED=true, and must never change default SFW behavior. Adult routes must fail closed before provider calls when consent, age verification, AI disclosure, platform eligibility, or human review requirements are missing.",
+    "ADULT MODE IS A PARALLEL EXPLICIT LANE. SFW and adult may both be enabled via AVATAR_CONTENT_MODES, but SFW remains the default public lane. Adult workflows MUST use explicit adult routes/config and must never change default SFW behavior. Adult routes must fail closed before provider calls when consent, age verification, AI disclosure, platform eligibility, or human review requirements are missing.",
     "PROHIBITED CONTENT REMAINS BLOCKED. Adult mode must block minors or age-ambiguous subjects, non-consensual or impaired scenarios, sexual violence, third-party likeness impersonation, and other platform-prohibited content. This applies before generation and before delivery.",
     "FAIL CLOSED. On any error reading/scoring media or text (provider error, decode error, model load failure), treat the content as unsafe or ineligible and block it. Never default-allow on exception.",
     "CONSENT/LIKENESS. Likeness training is for the operator's own likeness or explicitly consented likeness only. Persona records carry an attestation; do not add bulk/third-party likeness ingestion.",
@@ -61,3 +61,4 @@
     }
   }
 }
+

@@ -1,11 +1,11 @@
 import importlib
 
 
-def make_client(tmp_path, monkeypatch, *, adult_enabled=False):
+def make_client(tmp_path, monkeypatch, *, content_modes="sfw,adult"):
     monkeypatch.setenv("AVATAR_PROVIDER", "fake")
     monkeypatch.setenv("AVATAR_DB_URL", f"sqlite:///{tmp_path}/adult.db")
     monkeypatch.setenv("AVATAR_MEDIA_DIR", str(tmp_path / "media"))
-    monkeypatch.setenv("AVATAR_ADULT_MODE_ENABLED", "true" if adult_enabled else "false")
+    monkeypatch.setenv("AVATAR_CONTENT_MODES", content_modes)
     monkeypatch.setenv("AVATAR_ADULT_ALLOWED_PLATFORMS", "fanvue,telegram")
 
     import avatar_studio.config as config
@@ -24,8 +24,8 @@ def make_client(tmp_path, monkeypatch, *, adult_enabled=False):
     return TestClient(app_mod.app)
 
 
-def test_adult_policy_endpoint_disabled_by_default(tmp_path, monkeypatch):
-    client = make_client(tmp_path, monkeypatch, adult_enabled=False)
+def test_adult_policy_endpoint_disabled_when_adult_mode_absent(tmp_path, monkeypatch):
+    client = make_client(tmp_path, monkeypatch, content_modes="sfw")
     res = client.post(
         "/adult/policy-check",
         json={
@@ -40,11 +40,11 @@ def test_adult_policy_endpoint_disabled_by_default(tmp_path, monkeypatch):
     body = res.json()
     assert body["decision"] == "disabled"
     assert body["allowed"] is False
-    assert body["reasons"] == ["adult_mode_disabled"]
+    assert body["reasons"] == ["adult_content_mode_disabled"]
 
 
 def test_adult_policy_endpoint_allows_when_enabled(tmp_path, monkeypatch):
-    client = make_client(tmp_path, monkeypatch, adult_enabled=True)
+    client = make_client(tmp_path, monkeypatch)
     res = client.post(
         "/adult/policy-check",
         json={
@@ -60,7 +60,7 @@ def test_adult_policy_endpoint_allows_when_enabled(tmp_path, monkeypatch):
 
 
 def test_adult_policy_endpoint_uses_persona_consent(tmp_path, monkeypatch):
-    client = make_client(tmp_path, monkeypatch, adult_enabled=True)
+    client = make_client(tmp_path, monkeypatch)
     pid = client.post(
         "/personas",
         json={"name": "Ava", "trigger_word": "ava", "consent_attestation": True},
@@ -80,7 +80,7 @@ def test_adult_policy_endpoint_uses_persona_consent(tmp_path, monkeypatch):
 
 
 def test_adult_policy_endpoint_blocks_prohibited_terms(tmp_path, monkeypatch):
-    client = make_client(tmp_path, monkeypatch, adult_enabled=True)
+    client = make_client(tmp_path, monkeypatch)
     res = client.post(
         "/adult/policy-check",
         json={
@@ -94,3 +94,6 @@ def test_adult_policy_endpoint_blocks_prohibited_terms(tmp_path, monkeypatch):
     assert res.status_code == 200
     assert res.json()["allowed"] is False
     assert "minor_or_age_ambiguous" in res.json()["reasons"]
+
+
+
