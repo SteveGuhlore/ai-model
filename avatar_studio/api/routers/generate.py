@@ -11,15 +11,15 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from avatar_studio.api.deps import gen_context, registry, store
+from avatar_studio.api.deps import copywriter, gen_context, registry, store
 from avatar_studio.channels.base import Brief, PromptBlocked
 from avatar_studio.channels.lifestyle import LifestyleGenerator
-from avatar_studio.store.models import Content, ReviewStatus
+from avatar_studio.channels.meta_ads import MetaAdAssembler
+from avatar_studio.channels.product_ad import ProductAdGenerator
+from avatar_studio.channels.tiktok import TikTokGenerator
+from avatar_studio.store.models import Content, Product, ReviewStatus
 
 router = APIRouter(tags=["content"])
-
-# Only channels implemented so far. Others raise 400 until their phase lands.
-_CHANNELS = {"lifestyle": LifestyleGenerator}
 
 
 class GenerateIn(BaseModel):
@@ -45,24 +45,89 @@ def _content_out(c: Content) -> dict:
     }
 
 
-@router.post("/generate")
-def generate(inp: GenerateIn):
-    persona = registry().get(inp.persona_id)
+def _brief(inp) -> Brief:
+    return Brief(prompt=inp.prompt, placements=inp.placements, count=inp.count, seed=inp.seed)
+
+
+def _require_persona(persona_id: str):
+    persona = registry().get(persona_id)
     if persona is None:
         raise HTTPException(404, "persona not found")
-    gen_cls = _CHANNELS.get(inp.channel)
-    if gen_cls is None:
-        raise HTTPException(400, f"channel {inp.channel!r} not available yet")
+    return persona
 
-    gen = gen_cls(gen_context())
-    brief = Brief(
-        prompt=inp.prompt, placements=inp.placements, count=inp.count, seed=inp.seed
-    )
+
+@router.post("/generate")
+def generate(inp: GenerateIn):
+    """Persona+brief channels: lifestyle (images) and tiktok (video)."""
+    persona = _require_persona(inp.persona_id)
+    if inp.channel == "lifestyle":
+        gen = LifestyleGenerator(gen_context())
+    elif inp.channel == "tiktok":
+        gen = TikTokGenerator(gen_context(), copywriter())
+    else:
+        raise HTTPException(400, f"channel {inp.channel!r} not available on this endpoint")
     try:
-        produced = gen.generate(persona, brief)
+        produced = gen.generate(persona, _brief(inp))
     except PromptBlocked as exc:
         raise HTTPException(422, str(exc))
     return {"created": len(produced), "content": [_content_out(c) for c in produced]}
+
+
+class ProductAdIn(GenerateIn):
+    product_id: str
+
+
+@router.post("/generate/product-ad")
+def generate_product_ad(inp: ProductAdIn):
+    persona = _require_persona(inp.persona_id)
+    product = store().get_product(inp.product_id)
+    if product is None:
+        raise HTTPException(404, "product not found")
+    gen = ProductAdGenerator(gen_context(), copywriter())
+    try:
+        produced = gen.generate(persona, product, _brief(inp))
+    except PromptBlocked as exc:
+        raise HTTPException(422, str(exc))
+    return {"created": len(produced), "content": [_content_out(c) for c in produced]}
+
+
+class MetaAdIn(GenerateIn):
+    product_id: str | None = None
+    copy_variants: int = 2
+
+
+@router.post("/generate/meta-ad")
+def generate_meta_ad(inp: MetaAdIn):
+    persona = _require_persona(inp.persona_id)
+    product = store().get_product(inp.product_id) if inp.product_id else None
+    if inp.product_id and product is None:
+        raise HTTPException(404, "product not found")
+    asm = MetaAdAssembler(gen_context(), copywriter())
+    try:
+        draft = asm.assemble(persona, _brief(inp), product=product, copy_variants=inp.copy_variants)
+    except PromptBlocked as exc:
+        raise HTTPException(422, str(exc))
+    return {
+        "persona_id": draft.persona_id,
+        "product_id": draft.product_id,
+        "variant_count": draft.variant_count,
+        "creatives": [_content_out(c) for c in draft.creatives],
+        "primary_texts": draft.primary_texts,
+        "headlines": draft.headlines,
+    }
+
+
+class ProductIn(BaseModel):
+    name: str
+    category: str = ""
+    description: str = ""
+    source_image: str = ""
+
+
+@router.post("/products")
+def create_product(inp: ProductIn):
+    p = store().create_product(Product(**inp.model_dump()))
+    return {"id": p.id, "name": p.name, "category": p.category}
 
 
 @router.get("/content")

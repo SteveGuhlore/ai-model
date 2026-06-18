@@ -33,6 +33,15 @@ def client(tmp_path, monkeypatch):
 
     monkeypatch.setattr(factory, "build_media_gate", lambda s: GateAllow())
 
+    # Stub the copywriter so API tests don't reach the Ollama backend.
+    from avatar_studio.copy.writer import Copywriter
+
+    class FixedLLM:
+        def reply(self, message, history):
+            return "clean upbeat copy"
+
+    monkeypatch.setattr(factory, "build_copywriter", lambda s: Copywriter(FixedLLM()))
+
     from fastapi.testclient import TestClient
 
     return TestClient(app_mod.app)
@@ -85,11 +94,56 @@ def test_generate_blocks_explicit_prompt(client):
     assert g.status_code == 422
 
 
+def _ready_persona(client):
+    pid = client.post(
+        "/personas", json={"name": "Ava", "trigger_word": "ava", "consent_attestation": True}
+    ).json()["id"]
+    client.post(f"/personas/{pid}/train", json={"images_zip_url": "https://x/i.zip"})
+    return pid
+
+
+def test_tiktok_channel_generates_video(client):
+    pid = _ready_persona(client)
+    g = client.post(
+        "/generate",
+        json={"persona_id": pid, "channel": "tiktok", "prompt": "beach trend", "count": 2},
+    )
+    assert g.status_code == 200
+    assert g.json()["created"] == 2
+    assert all(c["kind"] == "video" for c in g.json()["content"])
+
+
+def test_product_ad_endpoint(client):
+    pid = _ready_persona(client)
+    prod = client.post("/products", json={"name": "Lace set", "category": "intimates"}).json()["id"]
+    g = client.post(
+        "/generate/product-ad",
+        json={"persona_id": pid, "product_id": prod, "prompt": "studio",
+              "placements": ["ig_portrait"], "count": 2},
+    )
+    assert g.status_code == 200
+    assert g.json()["created"] == 2
+
+
+def test_meta_ad_endpoint(client):
+    pid = _ready_persona(client)
+    g = client.post(
+        "/generate/meta-ad",
+        json={"persona_id": pid, "prompt": "lifestyle",
+              "placements": ["ig_square", "ig_portrait"], "count": 1, "copy_variants": 2},
+    )
+    assert g.status_code == 200
+    body = g.json()
+    assert len(body["creatives"]) == 2
+    assert len(body["primary_texts"]) == 2
+    assert body["variant_count"] == 4
+
+
 def test_unknown_channel_rejected(client):
     pid = client.post(
         "/personas", json={"name": "Ava", "consent_attestation": True}
     ).json()["id"]
     g = client.post(
-        "/generate", json={"persona_id": pid, "channel": "tiktok", "prompt": "hi"}
+        "/generate", json={"persona_id": pid, "channel": "carrier_pigeon", "prompt": "hi"}
     )
     assert g.status_code == 400

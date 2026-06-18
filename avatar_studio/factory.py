@@ -70,6 +70,15 @@ def build_store(settings: Settings):
     return SqliteStore(settings.db_url, settings.media_dir)
 
 
+def build_copywriter(settings: Settings):
+    """Persona-voiced copywriter backed by the local LLM brain."""
+    from avatar_studio.copy.writer import Copywriter
+    from avatar_studio.persona.ollama_backend import OllamaPersona
+
+    llm = OllamaPersona(settings.ollama_url, settings.ollama_model, settings.persona_name)
+    return Copywriter(llm)
+
+
 def build_gen_context(settings: Settings, store=None):
     """Assemble the channel GenContext (provider + gates + store) in one place."""
     from avatar_studio.channels.base import GenContext

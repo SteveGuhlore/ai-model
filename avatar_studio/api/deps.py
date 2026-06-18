@@ -42,3 +42,9 @@ def gen_context():
     from avatar_studio.factory import build_gen_context
 
     return build_gen_context(_settings, store=store())
+
+
+def copywriter():
+    from avatar_studio.factory import build_copywriter
+
+    return build_copywriter(_settings)

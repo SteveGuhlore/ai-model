@@ -69,6 +69,7 @@ def screen_and_store_image(
     aspect_ratio: str,
     ctx: GenContext,
     product_id: str | None = None,
+    copy_text: str = "",
 ) -> Content | None:
     """Write bytes, run the media gate, and store ONLY if SFW.
 
@@ -99,9 +100,56 @@ def screen_and_store_image(
         kind="image",
         safety_status=SafetyStatus.PASSED,
         prompt=prompt,
+        copy_text=copy_text,
         media_path=os.path.relpath(path, ctx.media_dir),
         aspect_ratio=aspect_ratio,
         product_id=product_id,
+    )
+    return ctx.store.create_content(content)
+
+
+def screen_and_store_video(
+    video_bytes: bytes,
+    *,
+    persona: Persona,
+    channel: str,
+    prompt: str,
+    aspect_ratio: str,
+    ctx: GenContext,
+    copy_text: str = "",
+    nsfw_flag: bool = False,
+) -> Content | None:
+    """Write a generated video, run the media gate (samples frames), store if SFW.
+
+    Returns the stored Content or None if dropped. Mirrors the image path so video
+    can never bypass the gate either.
+    """
+    if nsfw_flag:
+        return None
+
+    from avatar_studio.store.models import new_id
+
+    persona_dir = os.path.join(ctx.media_dir, persona.id)
+    os.makedirs(persona_dir, exist_ok=True)
+    content_id = new_id("content")
+    path = os.path.join(persona_dir, f"{content_id}.mp4")
+    with open(path, "wb") as f:
+        f.write(video_bytes)
+
+    if not screen_media(path, ctx.media_gate):
+        os.remove(path)
+        return None
+
+    content = Content(
+        id=content_id,
+        persona_id=persona.id,
+        channel=channel,
+        kind="video",
+        safety_status=SafetyStatus.PASSED,
+        prompt=prompt,
+        copy_text=copy_text,
+        media_path=os.path.relpath(path, ctx.media_dir),
+        aspect_ratio=aspect_ratio,
     )
     return ctx.store.create_content(content)
 
@@ -113,5 +161,6 @@ __all__ = [
     "PromptBlocked",
     "build_prompt",
     "screen_and_store_image",
+    "screen_and_store_video",
     "SFW_NEGATIVE_PROMPT",
 ]
