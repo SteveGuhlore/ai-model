@@ -14,6 +14,17 @@ def _env(key: str, default: str) -> str:
     return os.environ.get(key, default)
 
 
+def _env_bool(key: str, default: bool) -> bool:
+    value = os.environ.get(key)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _csv(value: str) -> tuple[str, ...]:
+    return tuple(part.strip().lower() for part in value.split(",") if part.strip())
+
+
 @dataclass
 class Settings:
     # Paths
@@ -43,6 +54,15 @@ class Settings:
     nsfw_classifier: str = _env("AVATAR_NSFW_CLASSIFIER", "Falconsai/nsfw_image_detection")
     nsfw_threshold: float = float(_env("AVATAR_NSFW_THRESHOLD", "0.7"))
 
+    # Content modes. SFW and adult are parallel lanes; SFW remains the default
+    # for public/social/ad workflows, while adult routes require explicit platform,
+    # consent, age verification, AI disclosure, and review checks.
+    content_modes: str = _env("AVATAR_CONTENT_MODES", "sfw,adult")
+    default_content_mode: str = _env("AVATAR_DEFAULT_CONTENT_MODE", "sfw")
+    adult_mode_enabled: bool = _env_bool("AVATAR_ADULT_MODE_ENABLED", True)
+    adult_allowed_platforms: str = _env("AVATAR_ADULT_ALLOWED_PLATFORMS", "fanvue,telegram")
+    adult_require_human_review: bool = _env_bool("AVATAR_ADULT_REQUIRE_HUMAN_REVIEW", True)
+
     # Hosted generation provider (creator content channels)
     provider: str = _env("AVATAR_PROVIDER", "fal")
     fal_key: str = _env("FAL_KEY", "")
@@ -54,6 +74,14 @@ class Settings:
 
     # Compute
     device: str = _env("AVATAR_DEVICE", "cuda")
+
+    @property
+    def enabled_content_modes(self) -> tuple[str, ...]:
+        return _csv(self.content_modes)
+
+    @property
+    def adult_content_enabled(self) -> bool:
+        return self.adult_mode_enabled and "adult" in self.enabled_content_modes
 
     @classmethod
     def from_env(cls) -> "Settings":

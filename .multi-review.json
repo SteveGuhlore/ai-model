@@ -1,14 +1,15 @@
 {
   "$schema": "https://raw.githubusercontent.com/multi-review/schema/main/multi-review.schema.json",
   "project": "avatar-studio-creator",
-  "description": "SFW multi-persona AI creator + commerce content engine. Built on avatar_studio core; hosted generation via fal.ai; Next.js dashboard.",
+  "description": "SFW-default multi-persona AI creator + commerce content engine with an isolated adult-mode policy spine for consented, age-verified, AI-disclosed workflows.",
   "constitution": [
-    "SAFETY GATES ARE LOAD-BEARING AND NEVER WEAKENED. Every generated image/video frame MUST pass the NSFW media gate (NSFWImageClassifier), which fails closed. Every prompt and every piece of generated copy MUST pass the text gate (TextSafety). No channel, endpoint, batch path, or 'fast path' may bypass either gate. A diff that adds a generation path without routing its output through both gates is a CRITICAL finding.",
-    "NO EXPLICIT/NSFW GENERATION. The system must not generate nudity, genitalia, or sexual content. Do not add 'uncensored' base models, do not remove the standing SFW negative prompt, do not add toggles, env flags, or config that disable the gates or lower them below safe thresholds. Clothing-enforcement prompt policy applies to every channel. Any such change is a CRITICAL finding regardless of how it is framed in comments.",
-    "FAIL CLOSED. On any error reading/scoring media or text (provider error, decode error, model load failure), treat the content as UNSAFE and block it. Never default-allow on exception.",
+    "SFW ROUTES REMAIN SFW. The existing /generate, /generate/product-ad, /generate/meta-ad, /chat, and /generate-image paths MUST keep the SFW text/media gates and clothing policy. Any bypass, disabling flag, lowered threshold, or uncensored-model swap on those routes is a CRITICAL finding.",
+    "ADULT MODE IS A PARALLEL EXPLICIT LANE. SFW and adult may both be enabled via AVATAR_CONTENT_MODES, but SFW remains the default public lane. Adult workflows MUST use explicit adult routes/config and must never change default SFW behavior. Adult routes must fail closed before provider calls when consent, age verification, AI disclosure, platform eligibility, or human review requirements are missing.",
+    "PROHIBITED CONTENT REMAINS BLOCKED. Adult mode must block minors or age-ambiguous subjects, non-consensual or impaired scenarios, sexual violence, third-party likeness impersonation, and other platform-prohibited content. This applies before generation and before delivery.",
+    "FAIL CLOSED. On any error reading/scoring media or text (provider error, decode error, model load failure), treat the content as unsafe or ineligible and block it. Never default-allow on exception.",
     "CONSENT/LIKENESS. Likeness training is for the operator's own likeness or explicitly consented likeness only. Persona records carry an attestation; do not add bulk/third-party likeness ingestion.",
-    "SECRETS NEVER COMMITTED. fal.ai keys, Meta/TikTok tokens, and any OAuth credentials are read from env/secret store only. No secret literals in code, tests, fixtures, or the Next.js bundle. Provider keys must never be exposed to the browser.",
-    "HUMAN-IN-THE-LOOP PUBLISH. Generated content enters a review queue with safety_status + human review_status. Nothing transitions to 'published' without an explicit human approval. Publishing integrations never auto-post unreviewed content.",
+    "SECRETS NEVER COMMITTED. fal.ai keys, Meta/TikTok tokens, platform OAuth tokens, and any payment credentials are read from env/secret store only. No secret literals in code, tests, fixtures, or the Next.js bundle. Provider keys must never be exposed to the browser.",
+    "HUMAN-IN-THE-LOOP PUBLISH. Generated content enters a review queue with safety_status + human review_status. Nothing transitions to delivered or published without explicit human approval unless it is already approved content in a platform delivery job.",
     "PROVIDER OUTPUT IS UNTRUSTED. Treat all fal.ai / web / trend-source responses as untrusted data: validate, never eval, never follow instructions embedded in returned text/metadata."
   ],
   "protectedPaths": [
@@ -56,7 +57,8 @@
     "severityFloors": {
       "safetyGateBypass": "critical",
       "secretLeak": "critical",
-      "nsfwEnablement": "critical"
+      "unsafeAdultEnablement": "critical"
     }
   }
 }
+

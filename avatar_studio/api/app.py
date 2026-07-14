@@ -25,6 +25,7 @@ settings = Settings.from_env()
 app = FastAPI(title="Avatar Studio (SFW)", version="0.1.0")
 
 # Creator-studio routers (personas, generation, content review, jobs).
+from avatar_studio.api.routers import adult as _adult_router  # noqa: E402
 from avatar_studio.api.routers import generate as _generate_router  # noqa: E402
 from avatar_studio.api.routers import jobs as _jobs_router  # noqa: E402
 from avatar_studio.api.routers import personas as _personas_router  # noqa: E402
@@ -32,6 +33,7 @@ from avatar_studio.api.routers import personas as _personas_router  # noqa: E402
 app.include_router(_personas_router.router)
 app.include_router(_generate_router.router)
 app.include_router(_jobs_router.router)
+app.include_router(_adult_router.router)
 
 _pipeline = None
 _face = None
@@ -107,7 +109,7 @@ def generate_image(inp: ImageIn):
     from avatar_studio.safety.screen import screen_media, screen_text
     from avatar_studio.safety.text_filter import TextSafety
 
-    # Screen the prompt first — parity with the channel build_prompt path.
+    # Screen the prompt first - parity with the channel build_prompt path.
     if screen_text(inp.prompt, TextSafety()).blocked:
         return ImageOut(blocked=True, reason="input:sexual_explicit")
 
@@ -144,3 +146,4 @@ def content_media(persona_id: str, name: str):
     if not os.path.isfile(path):
         raise HTTPException(status_code=404, detail="not found")
     return FileResponse(path)
+
